@@ -128,6 +128,15 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
             }
         }
 
+        Request::GetConfigFields { provider } => {
+            let s = state.read().await;
+            let p = s.provider(provider);
+            Response::ConfigFields {
+                provider,
+                fields: p.config_fields(),
+            }
+        }
+
         Request::SetAutostart {
             provider,
             id,

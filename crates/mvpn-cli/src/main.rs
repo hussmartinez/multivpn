@@ -160,5 +160,14 @@ fn print_response(response: &Response) {
                 );
             }
         }
+        Response::ConfigFields { provider, fields } => {
+            println!("Config fields for {provider}:");
+            for field in fields {
+                println!(
+                    "- {} ({}, required: {})",
+                    field.label, field.key, field.required
+                );
+            }
+        }
     }
 }

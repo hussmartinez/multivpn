@@ -1,4 +1,6 @@
-use crate::types::{CreateRequest, ConnectionStatus, ProviderInfo, ProviderKind, VpnConnection};
+use crate::types::{
+    ConnectionStatus, CreateRequest, FormField, ProviderInfo, ProviderKind, VpnConnection,
+};
 use serde::{Deserialize, Serialize};
 
 pub const SOCKET_PATH: &str = "/run/multivpn.sock";
@@ -30,6 +32,9 @@ pub enum Request {
     Import {
         provider: ProviderKind,
         path: String,
+    },
+    GetConfigFields {
+        provider: ProviderKind,
     },
     SetAutostart {
         provider: ProviderKind,
@@ -65,6 +70,10 @@ pub enum Response {
     },
     Providers {
         items: Vec<ProviderInfo>,
+    },
+    ConfigFields {
+        provider: ProviderKind,
+        fields: Vec<FormField>,
     },
 }
 
@@ -255,6 +264,44 @@ mod tests {
                 assert_eq!(items.len(), 1);
                 assert_eq!(items[0].kind, ProviderKind::OpenVpn);
                 assert!(items[0].available);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn request_roundtrip_get_config_fields() {
+        let req = Request::GetConfigFields {
+            provider: ProviderKind::WireGuard,
+        };
+        let encoded = encode(&req).unwrap();
+        let decoded = decode_request(&encoded).unwrap();
+        match decoded {
+            Request::GetConfigFields { provider } => {
+                assert_eq!(provider, ProviderKind::WireGuard);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn response_roundtrip_config_fields() {
+        let resp = Response::ConfigFields {
+            provider: ProviderKind::OpenVpn,
+            fields: vec![FormField {
+                key: "config_path".into(),
+                label: "Config Path".into(),
+                required: true,
+                field_type: crate::types::FieldType::Text,
+            }],
+        };
+        let encoded = encode(&resp).unwrap();
+        let decoded = decode_response(&encoded).unwrap();
+        match decoded {
+            Response::ConfigFields { provider, fields } => {
+                assert_eq!(provider, ProviderKind::OpenVpn);
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0].key, "config_path");
             }
             _ => panic!("wrong variant"),
         }
