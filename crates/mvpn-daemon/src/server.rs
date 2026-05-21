@@ -1,9 +1,7 @@
-use crate::killswitch;
 use crate::state::DaemonState;
 use anyhow::Result;
 use mvpn_core::ipc::{self, Request, Response};
-use mvpn_core::types::{ProviderInfo, ProviderKind};
-use mvpn_providers::all_providers;
+use mvpn_core::types::ProviderInfo;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
@@ -31,8 +29,12 @@ pub async fn handle_client(stream: UnixStream, state: Arc<RwLock<DaemonState>>) 
 async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Response {
     match req {
         Request::ListConnections => {
+            let providers = {
+                let s = state.read().await;
+                s.providers()
+            };
             let mut all = Vec::new();
-            for provider in all_providers() {
+            for provider in providers {
                 if provider.is_available() {
                     match provider.list_connections() {
                         Ok(conns) => all.extend(conns),
@@ -150,11 +152,11 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
 
         Request::KillSwitchEnable => {
             let mut s = state.write().await;
-            match killswitch::enable() {
+            match s.kill_switch().enable() {
                 Ok(()) => {
                     s.kill_switch_active = true;
                     s.config.general.kill_switch = true;
-                    let _ = s.config.save();
+                    let _ = s.save_config();
                     Response::KillSwitch { active: true }
                 }
                 Err(e) => Response::Error {
@@ -165,11 +167,11 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
 
         Request::KillSwitchDisable => {
             let mut s = state.write().await;
-            match killswitch::disable() {
+            match s.kill_switch().disable() {
                 Ok(()) => {
                     s.kill_switch_active = false;
                     s.config.general.kill_switch = false;
-                    let _ = s.config.save();
+                    let _ = s.save_config();
                     Response::KillSwitch { active: false }
                 }
                 Err(e) => Response::Error {
@@ -186,16 +188,17 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
         }
 
         Request::ListProviders => {
-            let items: Vec<ProviderInfo> = ProviderKind::all()
-                .iter()
-                .map(|kind| {
-                    let p = mvpn_providers::create_provider(*kind);
-                    ProviderInfo {
-                        kind: *kind,
-                        display_name: p.display_name().to_string(),
-                        available: p.is_available(),
-                        install_hint: p.install_hint().to_string(),
-                    }
+            let providers = {
+                let s = state.read().await;
+                s.providers()
+            };
+            let items: Vec<ProviderInfo> = providers
+                .into_iter()
+                .map(|p| ProviderInfo {
+                    kind: p.kind(),
+                    display_name: p.display_name().to_string(),
+                    available: p.is_available(),
+                    install_hint: p.install_hint().to_string(),
                 })
                 .collect();
             Response::Providers { items }

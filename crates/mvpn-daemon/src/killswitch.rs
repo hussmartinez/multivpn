@@ -1,9 +1,36 @@
 use anyhow::{Result, bail};
 use mvpn_providers::command::{command_exists, run};
+use std::sync::Arc;
 
 const NFT_TABLE: &str = "multivpn_killswitch";
 
 const VPN_INTERFACES: &[&str] = &["wg*", "tailscale*", "tun*", "proton*"];
+
+pub trait KillSwitchController: Send + Sync {
+    fn enable(&self) -> Result<()>;
+    fn disable(&self) -> Result<()>;
+    fn is_active(&self) -> bool;
+}
+
+pub struct SystemKillSwitchController;
+
+impl KillSwitchController for SystemKillSwitchController {
+    fn enable(&self) -> Result<()> {
+        enable()
+    }
+
+    fn disable(&self) -> Result<()> {
+        disable()
+    }
+
+    fn is_active(&self) -> bool {
+        is_active()
+    }
+}
+
+pub fn controller() -> Arc<dyn KillSwitchController> {
+    Arc::new(SystemKillSwitchController)
+}
 
 pub fn enable() -> Result<()> {
     if command_exists("nft") {

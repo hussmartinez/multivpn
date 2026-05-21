@@ -1,12 +1,7 @@
-mod autoconnect;
-mod killswitch;
-mod server;
-mod state;
-
 use anyhow::Result;
 use mvpn_core::config::Config;
 use mvpn_core::ipc::SOCKET_PATH;
-use state::DaemonState;
+use mvpn_daemon::{autoconnect, killswitch, server, state::DaemonState};
 use std::sync::Arc;
 use tokio::net::UnixListener;
 use tokio::sync::RwLock;
