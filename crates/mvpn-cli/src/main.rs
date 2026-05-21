@@ -1,10 +1,12 @@
 mod client;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
+use mvpn_core::config::Config;
 use mvpn_core::ipc::{Request, Response};
 use mvpn_core::types::{ConnectionStatus, ProviderKind};
 use mvpn_providers::create_provider;
+use std::fs;
 use std::process::Command;
 
 #[derive(Parser, Debug)]
@@ -71,6 +73,11 @@ enum Commands {
         /// on, off, or status
         action: String,
     },
+    /// Manage multivpn config
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
     /// List available providers
     Providers(JsonFlag),
 }
@@ -105,6 +112,25 @@ enum AutoconnectCommands {
 enum Action {
     Daemon { request: Request, json: bool },
     Install { provider: ProviderKind, run: bool },
+}
+
+#[derive(Subcommand, Debug)]
+enum ConfigCommands {
+    /// Print the current config file contents
+    Show,
+    /// Print the config file path
+    Path,
+    /// Open the config file in $EDITOR
+    Edit,
+    /// Set a config value
+    Set {
+        key: String,
+        value: String,
+    },
+    /// Get a config value
+    Get {
+        key: String,
+    },
 }
 
 fn parse_provider(s: &str) -> Result<ProviderKind> {
@@ -189,6 +215,7 @@ fn build_action(cli: Cli) -> Result<Action> {
             request: Request::ListProviders,
             json: flags.json,
         },
+        Commands::Config { .. } => unreachable!("handled before build_action"),
     };
 
     Ok(action)
@@ -197,17 +224,22 @@ fn build_action(cli: Cli) -> Result<Action> {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match build_action(cli)? {
-        Action::Daemon { request, json } => {
-            let response = client::send(&request)?;
-            print_response(&response, json)?;
-        }
-        Action::Install { provider, run } => {
-            run_install(provider, run)?;
+    match cli.command {
+        Commands::Config { command } => handle_config_command(command),
+        other => {
+            let cli_rewrap = Cli { command: other };
+            match build_action(cli_rewrap)? {
+                Action::Daemon { request, json } => {
+                    let response = client::send(&request)?;
+                    print_response(&response, json)?;
+                }
+                Action::Install { provider, run } => {
+                    run_install(provider, run)?;
+                }
+            }
+            Ok(())
         }
     }
-
-    Ok(())
 }
 
 fn run_install(provider: ProviderKind, run: bool) -> Result<()> {
@@ -252,6 +284,7 @@ fn print_response(response: &Response, json: bool) -> Result<()> {
     match response {
         Response::Ok { message } => println!("{message}"),
         Response::Error { message } => eprintln!("error: {message}"),
+        Response::ConfigValue { value } => println!("{value}"),
         Response::Connections { items } => {
             if json {
                 println!("{}", serde_json::to_string_pretty(items)?);
@@ -447,4 +480,59 @@ mod tests {
             Some("sudo apt install openvpn")
         );
     }
+}
+
+fn handle_config_command(command: ConfigCommands) -> Result<()> {
+    match command {
+        ConfigCommands::Show => {
+            let path = Config::config_path();
+            if path.exists() {
+                print!(
+                    "{}",
+                    fs::read_to_string(&path)
+                        .with_context(|| format!("failed to read {}", path.display()))?
+                );
+            } else {
+                print!("{}", toml::to_string_pretty(&Config::default())?);
+            }
+            Ok(())
+        }
+        ConfigCommands::Path => {
+            println!("{}", Config::config_path().display());
+            Ok(())
+        }
+        ConfigCommands::Edit => edit_config(),
+        ConfigCommands::Set { key, value } => {
+            let response = client::send(&Request::ConfigSet { key, value })?;
+            print_response(&response, false)?;
+            Ok(())
+        }
+        ConfigCommands::Get { key } => {
+            let response = client::send(&Request::ConfigGet { key })?;
+            print_response(&response, false)?;
+            Ok(())
+        }
+    }
+}
+
+fn edit_config() -> Result<()> {
+    let path = Config::config_path();
+    if !path.exists() {
+        Config::default().save()?;
+    }
+
+    let editor = std::env::var("EDITOR").context("$EDITOR is not set")?;
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg("$EDITOR \"$1\"")
+        .arg("sh")
+        .arg(&path)
+        .status()
+        .with_context(|| format!("failed to launch editor '{editor}'"))?;
+
+    if !status.success() {
+        bail!("editor exited with status {status}");
+    }
+
+    Ok(())
 }

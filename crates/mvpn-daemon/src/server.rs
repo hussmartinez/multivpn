@@ -256,6 +256,32 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
             }
         }
 
+        Request::ConfigGet { key } => {
+            let s = state.read().await;
+            match s.config.get_value(&key) {
+                Ok(value) => Response::ConfigValue { value },
+                Err(e) => Response::Error {
+                    message: e.to_string(),
+                },
+            }
+        }
+
+        Request::ConfigSet { key, value } => {
+            let mut s = state.write().await;
+            match s
+                .config
+                .set_value(&key, &value)
+                .and_then(|_| s.config.save())
+            {
+                Ok(()) => Response::Ok {
+                    message: "config updated".into(),
+                },
+                Err(e) => Response::Error {
+                    message: e.to_string(),
+                },
+            }
+        }
+
         Request::ListProviders => {
             let providers = {
                 let s = state.read().await;

@@ -1,8 +1,9 @@
 use crate::types::ProviderKind;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use toml::map::Map;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -108,10 +109,73 @@ impl Config {
             .and_then(|p| p.config_dir.as_deref())
             .map(Path::new)
     }
+
+    pub fn get_value(&self, key: &str) -> Result<String> {
+        let value = toml::Value::try_from(self)?;
+        let current = get_path_value(&value, key)?;
+        Ok(format_value(current))
+    }
+
+    pub fn set_value(&mut self, key: &str, raw_value: &str) -> Result<()> {
+        let mut value = toml::Value::try_from(&*self)?;
+        set_path_value(&mut value, key, parse_value(raw_value))?;
+        *self = value.try_into()?;
+        Ok(())
+    }
 }
 
 pub fn parse_from_str(content: &str) -> Result<Config> {
     Ok(toml::from_str(content)?)
+}
+
+fn get_path_value<'a>(value: &'a toml::Value, key: &str) -> Result<&'a toml::Value> {
+    let mut current = value;
+    for part in key.split('.') {
+        let table = current
+            .as_table()
+            .ok_or_else(|| anyhow!("config key '{key}' does not refer to a table at '{part}'"))?;
+        current = table
+            .get(part)
+            .ok_or_else(|| anyhow!("config key not found: {key}"))?;
+    }
+    Ok(current)
+}
+
+fn set_path_value(root: &mut toml::Value, key: &str, value: toml::Value) -> Result<()> {
+    let parts: Vec<&str> = key.split('.').collect();
+    if parts.is_empty() || parts.iter().any(|part| part.is_empty()) {
+        bail!("invalid config key: {key}");
+    }
+
+    let mut current = root
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("config root is not a table"))?;
+
+    for part in &parts[..parts.len() - 1] {
+        let entry = current
+            .entry((*part).to_string())
+            .or_insert_with(|| toml::Value::Table(Map::new()));
+        current = entry
+            .as_table_mut()
+            .ok_or_else(|| anyhow!("config key '{key}' conflicts with non-table value at '{part}'"))?;
+    }
+
+    current.insert(parts[parts.len() - 1].to_string(), value);
+    Ok(())
+}
+
+fn parse_value(raw_value: &str) -> toml::Value {
+    toml::from_str::<toml::Table>(&format!("value = {raw_value}"))
+        .ok()
+        .and_then(|table| table.get("value").cloned())
+        .unwrap_or_else(|| toml::Value::String(raw_value.to_string()))
+}
+
+fn format_value(value: &toml::Value) -> String {
+    match value {
+        toml::Value::String(s) => s.clone(),
+        _ => value.to_string(),
+    }
 }
 
 fn dirs_or_default() -> PathBuf {
@@ -246,5 +310,46 @@ custom_flag = true
         let cfg = Config::load_from(path).unwrap();
         assert!(!cfg.general.kill_switch);
         assert!(cfg.autoconnect.connections.is_empty());
+    }
+
+    #[test]
+    fn get_value_reads_nested_keys() {
+        let cfg = parse_from_str(
+            r#"
+[general]
+kill_switch = true
+
+[providers.wireguard]
+config_dir = "/etc/wireguard"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(cfg.get_value("general.kill_switch").unwrap(), "true");
+        assert_eq!(
+            cfg.get_value("providers.wireguard.config_dir").unwrap(),
+            "/etc/wireguard"
+        );
+    }
+
+    #[test]
+    fn set_value_updates_existing_and_new_keys() {
+        let mut cfg = Config::default();
+
+        cfg.set_value("general.kill_switch", "true").unwrap();
+        cfg.set_value("providers.wireguard.config_dir", "/etc/wireguard")
+            .unwrap();
+        cfg.set_value("providers.wireguard.mtu", "1420").unwrap();
+
+        assert!(cfg.general.kill_switch);
+        let wg = cfg.providers.get("wireguard").unwrap();
+        assert_eq!(wg.config_dir.as_deref(), Some("/etc/wireguard"));
+        assert_eq!(wg.extra.get("mtu"), Some(&toml::Value::Integer(1420)));
+    }
+
+    #[test]
+    fn get_value_errors_for_missing_key() {
+        let cfg = Config::default();
+        assert!(cfg.get_value("providers.wireguard.config_dir").is_err());
     }
 }
