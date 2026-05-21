@@ -1,0 +1,14 @@
+[package]
+name = "mvpn-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mvpn"
+path = "src/main.rs"
+
+[dependencies]
+mvpn-core.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+clap.workspace = true

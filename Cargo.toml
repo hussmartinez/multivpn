@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/mvpn-core",
+    "crates/mvpn-providers",
+    "crates/mvpn-daemon",
+    "crates/mvpn-cli",
+    "crates/mvpn-tui",
+    "crates/mvpn-tray",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.29"
+crossterm = "0.29"
+mvpn-core = { path = "crates/mvpn-core" }
+mvpn-providers = { path = "crates/mvpn-providers" }

@@ -1,0 +1,15 @@
+[package]
+name = "mvpn-tui"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mvpn-tui"
+path = "src/main.rs"
+
+[dependencies]
+mvpn-core.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true

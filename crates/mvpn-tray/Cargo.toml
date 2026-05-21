@@ -1,0 +1,13 @@
+[package]
+name = "mvpn-tray"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mvpn-tray"
+path = "src/main.rs"
+
+[dependencies]
+mvpn-core.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
