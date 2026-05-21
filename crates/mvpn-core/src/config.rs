@@ -65,8 +65,8 @@ impl Config {
         }
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?;
-        let config: Config =
-            toml::from_str(&content).with_context(|| format!("failed to parse {}", path.display()))?;
+        let config: Config = toml::from_str(&content)
+            .with_context(|| format!("failed to parse {}", path.display()))?;
         Ok(config)
     }
 
@@ -87,8 +87,8 @@ impl Config {
         }
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read {}", path.display()))?;
-        let config: Config =
-            toml::from_str(&content).with_context(|| format!("failed to parse {}", path.display()))?;
+        let config: Config = toml::from_str(&content)
+            .with_context(|| format!("failed to parse {}", path.display()))?;
         Ok(config)
     }
 
@@ -166,9 +166,15 @@ config_dir = "/etc/openvpn"
         let cfg = parse_from_str(toml_str).unwrap();
         assert!(cfg.general.kill_switch);
         assert_eq!(cfg.autoconnect.connections.len(), 2);
-        assert_eq!(cfg.autoconnect.connections[0].provider, ProviderKind::WireGuard);
+        assert_eq!(
+            cfg.autoconnect.connections[0].provider,
+            ProviderKind::WireGuard
+        );
         assert_eq!(cfg.autoconnect.connections[0].id, "wg0");
-        assert_eq!(cfg.autoconnect.connections[1].provider, ProviderKind::Tailscale);
+        assert_eq!(
+            cfg.autoconnect.connections[1].provider,
+            ProviderKind::Tailscale
+        );
         assert_eq!(
             cfg.provider_config_dir(ProviderKind::WireGuard),
             Some(Path::new("/etc/wireguard"))

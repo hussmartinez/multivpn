@@ -41,7 +41,7 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
                         Err(e) => {
                             return Response::Error {
                                 message: format!("{}: {e}", provider.display_name()),
-                            }
+                            };
                         }
                     }
                 }
@@ -156,6 +156,66 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
                 Err(e) => Response::Error {
                     message: e.to_string(),
                 },
+            }
+        }
+
+        Request::AutoconnectList => {
+            let s = state.read().await;
+            Response::AutoconnectEntries {
+                items: s.config.autoconnect.connections.clone(),
+            }
+        }
+
+        Request::AutoconnectAdd { provider, id } => {
+            let mut s = state.write().await;
+            let entry = mvpn_core::config::AutoconnectEntry {
+                provider,
+                id: id.clone(),
+            };
+
+            if s.config
+                .autoconnect
+                .connections
+                .iter()
+                .any(|existing| existing.provider == provider && existing.id == id)
+            {
+                Response::Ok {
+                    message: format!("autoconnect entry already exists for {provider} {id}"),
+                }
+            } else {
+                s.config.autoconnect.connections.push(entry);
+                match s.config.save() {
+                    Ok(()) => Response::Ok {
+                        message: format!("added autoconnect entry for {provider} {id}"),
+                    },
+                    Err(e) => Response::Error {
+                        message: e.to_string(),
+                    },
+                }
+            }
+        }
+
+        Request::AutoconnectRemove { provider, id } => {
+            let mut s = state.write().await;
+            let before = s.config.autoconnect.connections.len();
+            s.config
+                .autoconnect
+                .connections
+                .retain(|entry| !(entry.provider == provider && entry.id == id));
+
+            if s.config.autoconnect.connections.len() == before {
+                Response::Error {
+                    message: format!("autoconnect entry not found for {provider} {id}"),
+                }
+            } else {
+                match s.config.save() {
+                    Ok(()) => Response::Ok {
+                        message: format!("removed autoconnect entry for {provider} {id}"),
+                    },
+                    Err(e) => Response::Error {
+                        message: e.to_string(),
+                    },
+                }
             }
         }
 

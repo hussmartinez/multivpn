@@ -108,34 +108,106 @@ fn enable_iptables() -> Result<()> {
     run("iptables", &["-N", "MULTIVPN_KILLSWITCH"], true)?;
 
     // Allow loopback
-    run("iptables", &["-A", "MULTIVPN_KILLSWITCH", "-o", "lo", "-j", "ACCEPT"], true)?;
+    run(
+        "iptables",
+        &["-A", "MULTIVPN_KILLSWITCH", "-o", "lo", "-j", "ACCEPT"],
+        true,
+    )?;
 
     // Allow established/related
-    run("iptables", &["-A", "MULTIVPN_KILLSWITCH", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"], true)?;
+    run(
+        "iptables",
+        &[
+            "-A",
+            "MULTIVPN_KILLSWITCH",
+            "-m",
+            "conntrack",
+            "--ctstate",
+            "ESTABLISHED,RELATED",
+            "-j",
+            "ACCEPT",
+        ],
+        true,
+    )?;
 
     // Allow DHCP
-    run("iptables", &["-A", "MULTIVPN_KILLSWITCH", "-p", "udp", "--dport", "67:68", "-j", "ACCEPT"], true)?;
+    run(
+        "iptables",
+        &[
+            "-A",
+            "MULTIVPN_KILLSWITCH",
+            "-p",
+            "udp",
+            "--dport",
+            "67:68",
+            "-j",
+            "ACCEPT",
+        ],
+        true,
+    )?;
 
     // Allow DNS
-    run("iptables", &["-A", "MULTIVPN_KILLSWITCH", "-p", "udp", "--dport", "53", "-j", "ACCEPT"], true)?;
-    run("iptables", &["-A", "MULTIVPN_KILLSWITCH", "-p", "tcp", "--dport", "53", "-j", "ACCEPT"], true)?;
+    run(
+        "iptables",
+        &[
+            "-A",
+            "MULTIVPN_KILLSWITCH",
+            "-p",
+            "udp",
+            "--dport",
+            "53",
+            "-j",
+            "ACCEPT",
+        ],
+        true,
+    )?;
+    run(
+        "iptables",
+        &[
+            "-A",
+            "MULTIVPN_KILLSWITCH",
+            "-p",
+            "tcp",
+            "--dport",
+            "53",
+            "-j",
+            "ACCEPT",
+        ],
+        true,
+    )?;
 
     // Allow VPN interfaces
     for iface in VPN_INTERFACES {
-        run("iptables", &["-A", "MULTIVPN_KILLSWITCH", "-o", iface, "-j", "ACCEPT"], true)?;
+        run(
+            "iptables",
+            &["-A", "MULTIVPN_KILLSWITCH", "-o", iface, "-j", "ACCEPT"],
+            true,
+        )?;
     }
 
     // Drop everything else
-    run("iptables", &["-A", "MULTIVPN_KILLSWITCH", "-j", "DROP"], true)?;
+    run(
+        "iptables",
+        &["-A", "MULTIVPN_KILLSWITCH", "-j", "DROP"],
+        true,
+    )?;
 
     // Insert into OUTPUT chain
-    run("iptables", &["-I", "OUTPUT", "-j", "MULTIVPN_KILLSWITCH"], true)?;
+    run(
+        "iptables",
+        &["-I", "OUTPUT", "-j", "MULTIVPN_KILLSWITCH"],
+        true,
+    )?;
 
     Ok(())
 }
 
 fn disable_iptables() -> Result<()> {
-    let _ = run("iptables", &["-D", "OUTPUT", "-j", "MULTIVPN_KILLSWITCH"], true);
+    let _ = run(
+        "iptables",
+        &["-D", "OUTPUT", "-j", "MULTIVPN_KILLSWITCH"],
+        true,
+    );
     let _ = run("iptables", &["-F", "MULTIVPN_KILLSWITCH"], true);
     let _ = run("iptables", &["-X", "MULTIVPN_KILLSWITCH"], true);
     Ok(())

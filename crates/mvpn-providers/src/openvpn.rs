@@ -68,8 +68,12 @@ impl VpnProvider for OpenVpnProvider {
 
     fn connect(&self, id: &str) -> Result<()> {
         if command_exists("systemctl") {
-            run("systemctl", &["start", &format!("openvpn@{id}.service")], true)
-                .with_context(|| format!("failed to connect {id}"))?;
+            run(
+                "systemctl",
+                &["start", &format!("openvpn@{id}.service")],
+                true,
+            )
+            .with_context(|| format!("failed to connect {id}"))?;
         } else {
             bail!("systemctl required for OpenVPN service management");
         }
@@ -78,8 +82,12 @@ impl VpnProvider for OpenVpnProvider {
 
     fn disconnect(&self, id: &str) -> Result<()> {
         if command_exists("systemctl") {
-            run("systemctl", &["stop", &format!("openvpn@{id}.service")], true)
-                .with_context(|| format!("failed to disconnect {id}"))?;
+            run(
+                "systemctl",
+                &["stop", &format!("openvpn@{id}.service")],
+                true,
+            )
+            .with_context(|| format!("failed to disconnect {id}"))?;
         } else {
             bail!("systemctl required for OpenVPN service management");
         }
@@ -96,8 +104,12 @@ impl VpnProvider for OpenVpnProvider {
 
     fn status_details(&self, id: &str) -> Result<String> {
         if command_exists("systemctl") {
-            run("systemctl", &["status", "--no-pager", &format!("openvpn@{id}.service")], true)
-                .or_else(|_| Ok("service not found".to_string()))
+            run(
+                "systemctl",
+                &["status", "--no-pager", &format!("openvpn@{id}.service")],
+                true,
+            )
+            .or_else(|_| Ok("service not found".to_string()))
         } else {
             Ok("systemctl not available".to_string())
         }
@@ -124,7 +136,11 @@ impl VpnProvider for OpenVpnProvider {
             .to_string();
 
         let dest = self.config_dir.join(format!("{name}.conf"));
-        run("mkdir", &["-p", self.config_dir.to_string_lossy().as_ref()], true)?;
+        run(
+            "mkdir",
+            &["-p", self.config_dir.to_string_lossy().as_ref()],
+            true,
+        )?;
         run("cp", &[path.trim(), dest.to_string_lossy().as_ref()], true)
             .with_context(|| format!("failed to import {path}"))?;
         run("chmod", &["600", dest.to_string_lossy().as_ref()], true)?;
@@ -136,15 +152,29 @@ impl VpnProvider for OpenVpnProvider {
             bail!("systemctl is not available");
         }
         let action = if enabled { "enable" } else { "disable" };
-        run("systemctl", &[action, &format!("openvpn@{id}.service")], true)
-            .with_context(|| format!("failed to {action} autostart for {id}"))?;
+        run(
+            "systemctl",
+            &[action, &format!("openvpn@{id}.service")],
+            true,
+        )
+        .with_context(|| format!("failed to {action} autostart for {id}"))?;
         Ok(())
     }
 
     fn config_fields(&self) -> Vec<FormField> {
         vec![
-            FormField { key: "config_path".into(), label: "Config File Path".into(), required: true, field_type: FieldType::Text },
-            FormField { key: "autostart".into(), label: "Autostart".into(), required: false, field_type: FieldType::Bool },
+            FormField {
+                key: "config_path".into(),
+                label: "Config File Path".into(),
+                required: true,
+                field_type: FieldType::Text,
+            },
+            FormField {
+                key: "autostart".into(),
+                label: "Autostart".into(),
+                required: false,
+                field_type: FieldType::Bool,
+            },
         ]
     }
 }
@@ -155,7 +185,12 @@ impl OpenVpnProvider {
             return false;
         }
         std::process::Command::new("sudo")
-            .args(["-n", "systemctl", "is-active", &format!("openvpn@{name}.service")])
+            .args([
+                "-n",
+                "systemctl",
+                "is-active",
+                &format!("openvpn@{name}.service"),
+            ])
             .status()
             .map(|s| s.success())
             .unwrap_or(false)
@@ -166,7 +201,12 @@ impl OpenVpnProvider {
             return false;
         }
         std::process::Command::new("sudo")
-            .args(["-n", "systemctl", "is-enabled", &format!("openvpn@{name}.service")])
+            .args([
+                "-n",
+                "systemctl",
+                "is-enabled",
+                &format!("openvpn@{name}.service"),
+            ])
             .status()
             .map(|s| s.success())
             .unwrap_or(false)

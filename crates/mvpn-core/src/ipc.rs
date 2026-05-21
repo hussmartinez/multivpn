@@ -1,3 +1,4 @@
+use crate::config::AutoconnectEntry;
 use crate::types::{
     ConnectionStatus, CreateRequest, FormField, ProviderInfo, ProviderKind, VpnConnection,
 };
@@ -41,6 +42,15 @@ pub enum Request {
         id: String,
         enabled: bool,
     },
+    AutoconnectList,
+    AutoconnectAdd {
+        provider: ProviderKind,
+        id: String,
+    },
+    AutoconnectRemove {
+        provider: ProviderKind,
+        id: String,
+    },
     KillSwitchEnable,
     KillSwitchDisable,
     KillSwitchStatus,
@@ -67,6 +77,9 @@ pub enum Response {
     },
     KillSwitch {
         active: bool,
+    },
+    AutoconnectEntries {
+        items: Vec<AutoconnectEntry>,
     },
     Providers {
         items: Vec<ProviderInfo>,
@@ -188,6 +201,23 @@ mod tests {
     }
 
     #[test]
+    fn request_roundtrip_autoconnect_add() {
+        let req = Request::AutoconnectAdd {
+            provider: ProviderKind::OpenVpn,
+            id: "work".into(),
+        };
+        let encoded = encode(&req).unwrap();
+        let decoded = decode_request(&encoded).unwrap();
+        match decoded {
+            Request::AutoconnectAdd { provider, id } => {
+                assert_eq!(provider, ProviderKind::OpenVpn);
+                assert_eq!(id, "work");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
     fn response_roundtrip_ok() {
         let resp = Response::Ok {
             message: "done".into(),
@@ -243,6 +273,26 @@ mod tests {
         let decoded = decode_response(&encoded).unwrap();
         match decoded {
             Response::KillSwitch { active } => assert!(active),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn response_roundtrip_autoconnect_entries() {
+        let resp = Response::AutoconnectEntries {
+            items: vec![AutoconnectEntry {
+                provider: ProviderKind::WireGuard,
+                id: "wg0".into(),
+            }],
+        };
+        let encoded = encode(&resp).unwrap();
+        let decoded = decode_response(&encoded).unwrap();
+        match decoded {
+            Response::AutoconnectEntries { items } => {
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].provider, ProviderKind::WireGuard);
+                assert_eq!(items[0].id, "wg0");
+            }
             _ => panic!("wrong variant"),
         }
     }

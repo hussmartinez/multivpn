@@ -74,7 +74,9 @@ impl WireGuardProvider {
     fn generate_private_key(&self) -> Result<String> {
         run("wg", &["genkey"], false)
             .or_else(|_| run("wg", &["genkey"], true))
-            .context("failed to generate private key; install wireguard-tools or provide one explicitly")
+            .context(
+                "failed to generate private key; install wireguard-tools or provide one explicitly",
+            )
     }
 
     fn build_config_text(&self, config: &CreateRequest) -> Result<String> {
@@ -181,14 +183,16 @@ impl VpnProvider for WireGuardProvider {
         }
 
         for name in active {
-            by_name.entry(name.clone()).or_insert_with(|| VpnConnection {
-                id: name.clone(),
-                provider: ProviderKind::WireGuard,
-                name: name.clone(),
-                status: ConnectionStatus::Connected,
-                autostart: self.is_enabled(&name),
-                details: serde_json::json!({}),
-            });
+            by_name
+                .entry(name.clone())
+                .or_insert_with(|| VpnConnection {
+                    id: name.clone(),
+                    provider: ProviderKind::WireGuard,
+                    name: name.clone(),
+                    status: ConnectionStatus::Connected,
+                    autostart: self.is_enabled(&name),
+                    details: serde_json::json!({}),
+                });
         }
 
         Ok(by_name.into_values().collect())
@@ -197,7 +201,11 @@ impl VpnProvider for WireGuardProvider {
     fn connect(&self, id: &str) -> Result<()> {
         Self::validate_name(id)?;
         if command_exists("systemctl") {
-            run("systemctl", &["start", &format!("wg-quick@{id}.service")], true)
+            run(
+                "systemctl",
+                &["start", &format!("wg-quick@{id}.service")],
+                true,
+            )
         } else {
             let path = self.config_path(id);
             run("wg-quick", &["up", path.to_string_lossy().as_ref()], true)
@@ -209,7 +217,11 @@ impl VpnProvider for WireGuardProvider {
     fn disconnect(&self, id: &str) -> Result<()> {
         Self::validate_name(id)?;
         if command_exists("systemctl") {
-            run("systemctl", &["stop", &format!("wg-quick@{id}.service")], true)
+            run(
+                "systemctl",
+                &["stop", &format!("wg-quick@{id}.service")],
+                true,
+            )
         } else {
             let path = self.config_path(id);
             run("wg-quick", &["down", path.to_string_lossy().as_ref()], true)
@@ -251,8 +263,17 @@ impl VpnProvider for WireGuardProvider {
             bail!("{} already exists", path.display());
         }
 
-        run("mkdir", &["-p", self.config_dir.to_string_lossy().as_ref()], true)?;
-        run_with_stdin("tee", &[path.to_string_lossy().as_ref()], true, Some(config_text.as_bytes()))?;
+        run(
+            "mkdir",
+            &["-p", self.config_dir.to_string_lossy().as_ref()],
+            true,
+        )?;
+        run_with_stdin(
+            "tee",
+            &[path.to_string_lossy().as_ref()],
+            true,
+            Some(config_text.as_bytes()),
+        )?;
         run("chmod", &["600", path.to_string_lossy().as_ref()], true)?;
 
         let autostart = config
@@ -271,8 +292,12 @@ impl VpnProvider for WireGuardProvider {
         Self::validate_name(id)?;
         let _ = self.disconnect(id);
         let _ = self.set_autostart(id, false);
-        run("rm", &["-f", self.config_path(id).to_string_lossy().as_ref()], true)
-            .with_context(|| format!("failed to remove {id}"))?;
+        run(
+            "rm",
+            &["-f", self.config_path(id).to_string_lossy().as_ref()],
+            true,
+        )
+        .with_context(|| format!("failed to remove {id}"))?;
         Ok(())
     }
 
@@ -294,8 +319,17 @@ impl VpnProvider for WireGuardProvider {
             .or_else(|_| run("cat", &[path.trim()], true))
             .with_context(|| format!("failed to read {path}"))?;
 
-        run("mkdir", &["-p", self.config_dir.to_string_lossy().as_ref()], true)?;
-        run_with_stdin("tee", &[dest.to_string_lossy().as_ref()], true, Some(content.as_bytes()))?;
+        run(
+            "mkdir",
+            &["-p", self.config_dir.to_string_lossy().as_ref()],
+            true,
+        )?;
+        run_with_stdin(
+            "tee",
+            &[dest.to_string_lossy().as_ref()],
+            true,
+            Some(content.as_bytes()),
+        )?;
         run("chmod", &["600", dest.to_string_lossy().as_ref()], true)?;
 
         Ok(name)
@@ -307,23 +341,77 @@ impl VpnProvider for WireGuardProvider {
             bail!("systemctl is not available");
         }
         let action = if enabled { "enable" } else { "disable" };
-        run("systemctl", &[action, &format!("wg-quick@{id}.service")], true)
-            .with_context(|| format!("failed to {action} autostart for {id}"))?;
+        run(
+            "systemctl",
+            &[action, &format!("wg-quick@{id}.service")],
+            true,
+        )
+        .with_context(|| format!("failed to {action} autostart for {id}"))?;
         Ok(())
     }
 
     fn config_fields(&self) -> Vec<FormField> {
         vec![
-            FormField { key: "addresses".into(), label: "Addresses".into(), required: false, field_type: FieldType::Csv },
-            FormField { key: "dns".into(), label: "DNS".into(), required: false, field_type: FieldType::Csv },
-            FormField { key: "private_key".into(), label: "Private Key".into(), required: false, field_type: FieldType::Secret },
-            FormField { key: "listen_port".into(), label: "Listen Port".into(), required: false, field_type: FieldType::Text },
-            FormField { key: "peer_public_key".into(), label: "Peer Public Key".into(), required: false, field_type: FieldType::Text },
-            FormField { key: "peer_preshared_key".into(), label: "Peer Preshared Key".into(), required: false, field_type: FieldType::Secret },
-            FormField { key: "peer_allowed_ips".into(), label: "Peer Allowed IPs".into(), required: false, field_type: FieldType::Csv },
-            FormField { key: "peer_endpoint".into(), label: "Peer Endpoint".into(), required: false, field_type: FieldType::Text },
-            FormField { key: "peer_keepalive".into(), label: "Peer Keepalive".into(), required: false, field_type: FieldType::Text },
-            FormField { key: "autostart".into(), label: "Autostart".into(), required: false, field_type: FieldType::Bool },
+            FormField {
+                key: "addresses".into(),
+                label: "Addresses".into(),
+                required: false,
+                field_type: FieldType::Csv,
+            },
+            FormField {
+                key: "dns".into(),
+                label: "DNS".into(),
+                required: false,
+                field_type: FieldType::Csv,
+            },
+            FormField {
+                key: "private_key".into(),
+                label: "Private Key".into(),
+                required: false,
+                field_type: FieldType::Secret,
+            },
+            FormField {
+                key: "listen_port".into(),
+                label: "Listen Port".into(),
+                required: false,
+                field_type: FieldType::Text,
+            },
+            FormField {
+                key: "peer_public_key".into(),
+                label: "Peer Public Key".into(),
+                required: false,
+                field_type: FieldType::Text,
+            },
+            FormField {
+                key: "peer_preshared_key".into(),
+                label: "Peer Preshared Key".into(),
+                required: false,
+                field_type: FieldType::Secret,
+            },
+            FormField {
+                key: "peer_allowed_ips".into(),
+                label: "Peer Allowed IPs".into(),
+                required: false,
+                field_type: FieldType::Csv,
+            },
+            FormField {
+                key: "peer_endpoint".into(),
+                label: "Peer Endpoint".into(),
+                required: false,
+                field_type: FieldType::Text,
+            },
+            FormField {
+                key: "peer_keepalive".into(),
+                label: "Peer Keepalive".into(),
+                required: false,
+                field_type: FieldType::Text,
+            },
+            FormField {
+                key: "autostart".into(),
+                label: "Autostart".into(),
+                required: false,
+                field_type: FieldType::Bool,
+            },
         ]
     }
 }
@@ -362,7 +450,9 @@ mod tests {
         );
     }
 
-    fn make_fields(entries: &[(&str, serde_json::Value)]) -> serde_json::Map<String, serde_json::Value> {
+    fn make_fields(
+        entries: &[(&str, serde_json::Value)],
+    ) -> serde_json::Map<String, serde_json::Value> {
         entries
             .iter()
             .map(|(k, v)| (k.to_string(), v.clone()))

@@ -113,8 +113,7 @@ impl VpnProvider for ProtonVpnProvider {
         if self.tool.is_none() {
             return Ok("ProtonVPN CLI not installed".into());
         }
-        run(self.cli_name(), &["status"], false)
-            .or_else(|_| Ok("unable to get status".into()))
+        run(self.cli_name(), &["status"], false).or_else(|_| Ok("unable to get status".into()))
     }
 
     fn create(&self, _config: &CreateRequest) -> Result<()> {
@@ -134,8 +133,11 @@ impl VpnProvider for ProtonVpnProvider {
     }
 
     fn config_fields(&self) -> Vec<FormField> {
-        vec![
-            FormField { key: "server".into(), label: "Server (country code or 'fastest')".into(), required: false, field_type: FieldType::Text },
-        ]
+        vec![FormField {
+            key: "server".into(),
+            label: "Server (country code or 'fastest')".into(),
+            required: false,
+            field_type: FieldType::Text,
+        }]
     }
 }
