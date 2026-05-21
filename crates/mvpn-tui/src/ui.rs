@@ -1,10 +1,10 @@
 use crate::app::App;
 use mvpn_core::types::ConnectionStatus;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
-use ratatui::Frame;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let layout = Layout::default()
@@ -38,7 +38,9 @@ fn render_header(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
 
 fn render_body(frame: &mut Frame, area: ratatui::layout::Rect, app: &App) {
     let items: Vec<ListItem> = if app.connections.is_empty() {
-        vec![ListItem::new("No connections found. Is mvpn-daemon running?")]
+        vec![ListItem::new(
+            "No connections found. Is mvpn-daemon running?",
+        )]
     } else {
         app.connections
             .iter()

@@ -1,6 +1,4 @@
-use crate::types::{
-    ConnectionStatus, CreateRequest, FormField, ProviderKind, VpnConnection,
-};
+use crate::types::{ConnectionStatus, CreateRequest, FormField, ProviderKind, VpnConnection};
 use anyhow::Result;
 
 pub trait VpnProvider: Send + Sync {
