@@ -39,6 +39,13 @@ pub enum Request {
     KillSwitchEnable,
     KillSwitchDisable,
     KillSwitchStatus,
+    ConfigGet {
+        key: String,
+    },
+    ConfigSet {
+        key: String,
+        value: String,
+    },
     ListProviders,
 }
 
@@ -62,6 +69,9 @@ pub enum Response {
     },
     KillSwitch {
         active: bool,
+    },
+    ConfigValue {
+        value: String,
     },
     Providers {
         items: Vec<ProviderInfo>,
@@ -179,6 +189,33 @@ mod tests {
     }
 
     #[test]
+    fn request_roundtrip_config_get_set() {
+        let get_req = Request::ConfigGet {
+            key: "general.kill_switch".into(),
+        };
+        let encoded = encode(&get_req).unwrap();
+        let decoded = decode_request(&encoded).unwrap();
+        match decoded {
+            Request::ConfigGet { key } => assert_eq!(key, "general.kill_switch"),
+            _ => panic!("wrong variant"),
+        }
+
+        let set_req = Request::ConfigSet {
+            key: "providers.wireguard.config_dir".into(),
+            value: "/etc/wireguard".into(),
+        };
+        let encoded = encode(&set_req).unwrap();
+        let decoded = decode_request(&encoded).unwrap();
+        match decoded {
+            Request::ConfigSet { key, value } => {
+                assert_eq!(key, "providers.wireguard.config_dir");
+                assert_eq!(value, "/etc/wireguard");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
     fn response_roundtrip_ok() {
         let resp = Response::Ok {
             message: "done".into(),
@@ -234,6 +271,19 @@ mod tests {
         let decoded = decode_response(&encoded).unwrap();
         match decoded {
             Response::KillSwitch { active } => assert!(active),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn response_roundtrip_config_value() {
+        let resp = Response::ConfigValue {
+            value: "/etc/wireguard".into(),
+        };
+        let encoded = encode(&resp).unwrap();
+        let decoded = decode_response(&encoded).unwrap();
+        match decoded {
+            Response::ConfigValue { value } => assert_eq!(value, "/etc/wireguard"),
             _ => panic!("wrong variant"),
         }
     }
