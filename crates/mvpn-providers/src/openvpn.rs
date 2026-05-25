@@ -34,15 +34,12 @@ impl VpnProvider for OpenVpnProvider {
     }
 
     fn list_connections(&self) -> Result<Vec<VpnConnection>> {
-        let script = format!(
-            "find '{}' -maxdepth 2 -type f \\( -name '*.conf' -o -name '*.ovpn' \\) 2>/dev/null | sort",
-            self.config_dir.display()
-        );
-        let output = crate::command::run_shell(&script, true).unwrap_or_default();
-
         let mut connections = Vec::new();
-        for line in output.lines().filter(|l| !l.trim().is_empty()) {
-            let path = PathBuf::from(line.trim());
+        let mut paths = Vec::new();
+        Self::collect_configs(&self.config_dir, 2, &mut paths);
+        paths.sort();
+
+        for path in paths {
             let name = path
                 .file_stem()
                 .and_then(|s| s.to_str())
@@ -60,7 +57,7 @@ impl VpnProvider for OpenVpnProvider {
                     ConnectionStatus::Disconnected
                 },
                 autostart: self.is_enabled(&name),
-                details: serde_json::json!({ "path": line.trim() }),
+                details: serde_json::json!({ "path": path.display().to_string() }),
             });
         }
         Ok(connections)
@@ -180,6 +177,24 @@ impl VpnProvider for OpenVpnProvider {
 }
 
 impl OpenVpnProvider {
+    fn collect_configs(dir: &PathBuf, depth: usize, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && depth > 1 {
+                Self::collect_configs(&path, depth - 1, out);
+            } else if path.is_file() {
+                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    if ext == "conf" || ext == "ovpn" {
+                        out.push(path);
+                    }
+                }
+            }
+        }
+    }
+
     fn is_service_active(&self, name: &str) -> bool {
         if !command_exists("systemctl") {
             return false;

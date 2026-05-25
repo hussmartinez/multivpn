@@ -2,9 +2,10 @@ use anyhow::{Context, Result, anyhow};
 use std::process::{Command, Stdio};
 
 pub fn command_exists(name: &str) -> bool {
-    Command::new("sh")
-        .arg("-lc")
-        .arg(format!("command -v {name} >/dev/null 2>&1"))
+    Command::new("which")
+        .arg(name)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -79,5 +80,26 @@ pub fn run_shell(script: &str, sudo: bool) -> Result<String> {
         run("sh", &["-lc", script], true)
     } else {
         run("sh", &["-lc", script], false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_exists_finds_sh() {
+        assert!(command_exists("sh"));
+    }
+
+    #[test]
+    fn command_exists_rejects_nonexistent() {
+        assert!(!command_exists("nonexistent_command_xyz_12345"));
+    }
+
+    #[test]
+    fn command_exists_not_injectable() {
+        assert!(!command_exists("sh; echo injected"));
+        assert!(!command_exists("$(echo injected)"));
     }
 }

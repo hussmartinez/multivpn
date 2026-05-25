@@ -55,19 +55,22 @@ impl WireGuardProvider {
     }
 
     fn read_config_files(&self) -> Result<Vec<(String, PathBuf)>> {
-        let script = format!(
-            "find '{}' -maxdepth 1 -type f -name '*.conf' -print 2>/dev/null | sort",
-            self.config_dir.display()
-        );
-        let output = command::run_shell(&script, true).unwrap_or_default();
+        let dir = &self.config_dir;
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(_) => return Ok(Vec::new()),
+        };
 
         let mut results = Vec::new();
-        for line in output.lines().filter(|l| !l.trim().is_empty()) {
-            let path = PathBuf::from(line.trim());
-            if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                results.push((name.to_string(), path));
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("conf") {
+                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                    results.push((name.to_string(), path));
+                }
             }
         }
+        results.sort_by(|a, b| a.0.cmp(&b.0));
         Ok(results)
     }
 
