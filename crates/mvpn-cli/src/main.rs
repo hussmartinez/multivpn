@@ -538,10 +538,7 @@ fn edit_config() -> Result<()> {
     }
 
     let editor = std::env::var("EDITOR").context("$EDITOR is not set")?;
-    let status = Command::new("sh")
-        .arg("-c")
-        .arg("$EDITOR \"$1\"")
-        .arg("sh")
+    let status = Command::new(&editor)
         .arg(&path)
         .status()
         .with_context(|| format!("failed to launch editor '{editor}'"))?;
