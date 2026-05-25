@@ -50,6 +50,12 @@ async fn handle_client_inner(stream: UnixStream, state: Arc<RwLock<DaemonState>>
 }
 
 async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Response {
+    if let Err(e) = validate_request_ids(&req) {
+        return Response::Error {
+            message: e.to_string(),
+        };
+    }
+
     match req {
         Request::ListConnections => {
             let providers = {
@@ -322,6 +328,24 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
             Response::Providers { items }
         }
     }
+}
+
+fn validate_request_ids(req: &Request) -> anyhow::Result<()> {
+    use mvpn_core::security::validate_connection_id;
+    match req {
+        Request::Connect { id, .. }
+        | Request::Disconnect { id, .. }
+        | Request::Status { id, .. }
+        | Request::Remove { id, .. }
+        | Request::SetAutostart { id, .. }
+        | Request::AutoconnectAdd { id, .. }
+        | Request::AutoconnectRemove { id, .. } => validate_connection_id(id)?,
+        Request::Import { path, .. } => {
+            mvpn_core::security::validate_import_path(path)?;
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn peer_uid(stream: &UnixStream) -> Result<u32> {

@@ -125,7 +125,7 @@ impl VpnProvider for OpenVpnProvider {
     }
 
     fn import(&self, path: &str) -> Result<String> {
-        let source = std::path::Path::new(path.trim());
+        let source = mvpn_core::security::validate_import_path(path)?;
         let name = source
             .file_stem()
             .and_then(|s| s.to_str())
