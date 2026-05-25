@@ -147,6 +147,10 @@ impl Tray for MvpnTray {
         "multivpn".to_string()
     }
 
+    fn activate(&mut self, _x: i32, _y: i32) {
+        open_tui();
+    }
+
     fn title(&self) -> String {
         self.summary()
     }
@@ -315,6 +319,23 @@ fn provider_label(provider: ProviderKind) -> &'static str {
         ProviderKind::OpenVpn => "OpenVPN",
         ProviderKind::ProtonVpn => "ProtonVPN",
         ProviderKind::Tailscale => "Tailscale",
+    }
+}
+
+fn open_tui() {
+    use std::process::Command;
+    let terminals = ["kitty", "alacritty", "foot", "wezterm", "gnome-terminal", "xterm"];
+    for term in &terminals {
+        let result = match *term {
+            "gnome-terminal" => Command::new(term).args(["--", "mvpn-tui"]).spawn(),
+            "kitty" | "alacritty" | "foot" | "wezterm" => {
+                Command::new(term).args(["-e", "mvpn-tui"]).spawn()
+            }
+            _ => Command::new(term).args(["-e", "mvpn-tui"]).spawn(),
+        };
+        if result.is_ok() {
+            return;
+        }
     }
 }
 
