@@ -34,7 +34,7 @@ impl VpnProvider for TailscaleProvider {
         }
 
         let status = self.status("default")?;
-        let details = self.status_details("default").unwrap_or_default();
+        let details = self.parse_status_details();
 
         Ok(vec![VpnConnection {
             id: "default".into(),
@@ -42,7 +42,7 @@ impl VpnProvider for TailscaleProvider {
             name: "Tailscale".into(),
             status,
             autostart: self.is_enabled(),
-            details: serde_json::json!({ "status": details }),
+            details,
         }])
     }
 
@@ -111,6 +111,32 @@ impl VpnProvider for TailscaleProvider {
 }
 
 impl TailscaleProvider {
+    fn parse_status_details(&self) -> serde_json::Value {
+        let output = match self.status_details("default") {
+            Ok(text) => text,
+            Err(_) => return serde_json::json!({}),
+        };
+
+        let mut peers = Vec::new();
+        for line in output.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                peers.push(serde_json::json!({
+                    "ip": parts[0],
+                    "hostname": parts[1],
+                    "os": parts[2],
+                    "status": parts[3..].join(" "),
+                }));
+            }
+        }
+
+        if peers.is_empty() {
+            serde_json::json!({})
+        } else {
+            serde_json::json!({ "peers": peers })
+        }
+    }
+
     fn is_enabled(&self) -> bool {
         if !command_exists("systemctl") {
             return false;
