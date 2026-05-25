@@ -24,16 +24,19 @@ A modular multi-VPN manager for Linux. Manage WireGuard, OpenVPN, ProtonVPN, and
 ### Build from source
 
 ```sh
-git clone <repo-url> && cd multivpn
-make install    # builds release + installs binaries + systemd unit
-make enable     # start and enable the daemon
+git clone https://github.com/hussmartinez/multivpn.git
+cd multivpn
+sudo make install    # builds release + installs binaries + systemd unit
+sudo make enable     # start and enable the daemon
 ```
 
-Requires Rust toolchain (rustup.rs).
+Requires Rust toolchain ([rustup.rs](https://rustup.rs)).
 
 ### Manual
 
 ```sh
+git clone https://github.com/hussmartinez/multivpn.git
+cd multivpn
 cargo build --release
 sudo cp target/release/{mvpn,mvpn-daemon,mvpn-tui,mvpn-tray} /usr/local/bin/
 sudo cp crates/mvpn-daemon/multivpn.service /etc/systemd/system/
