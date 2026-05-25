@@ -297,10 +297,11 @@ fn install_command_from_hint(hint: &str) -> Option<&str> {
 }
 
 fn print_response(response: &Response, json: bool) -> Result<()> {
+    use mvpn_core::security::sanitize_output;
     match response {
-        Response::Ok { message } => println!("{message}"),
-        Response::Error { message } => eprintln!("error: {message}"),
-        Response::ConfigValue { value } => println!("{value}"),
+        Response::Ok { message } => println!("{}", sanitize_output(message)),
+        Response::Error { message } => eprintln!("error: {}", sanitize_output(message)),
+        Response::ConfigValue { value } => println!("{}", sanitize_output(value)),
         Response::Connections { items } => {
             if json {
                 println!("{}", serde_json::to_string_pretty(items)?);

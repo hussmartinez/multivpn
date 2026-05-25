@@ -103,7 +103,7 @@ impl MvpnTray {
     }
 
     fn set_error(&mut self, error: String) {
-        self.state.last_error = Some(error);
+        self.state.last_error = Some(mvpn_core::security::sanitize_output(&error));
     }
 
     fn summary(&self) -> String {

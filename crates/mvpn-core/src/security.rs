@@ -42,6 +42,13 @@ pub fn validate_connection_id(id: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn sanitize_output(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_control() || *c == '\n')
+        .take(4096)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +100,18 @@ mod tests {
     fn connection_id_rejects_too_long() {
         let long = "a".repeat(256);
         assert!(validate_connection_id(&long).is_err());
+    }
+
+    #[test]
+    fn sanitize_strips_control_chars() {
+        assert_eq!(sanitize_output("hello\x1b[2Jworld"), "hello[2Jworld");
+        assert_eq!(sanitize_output("ok\n"), "ok\n");
+        assert_eq!(sanitize_output("\x07bell"), "bell");
+    }
+
+    #[test]
+    fn sanitize_truncates_long_output() {
+        let long = "x".repeat(5000);
+        assert_eq!(sanitize_output(&long).len(), 4096);
     }
 }

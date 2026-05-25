@@ -504,6 +504,10 @@ impl App {
         self.clamp_selection();
     }
 
+    fn sanitize(s: &str) -> String {
+        mvpn_core::security::sanitize_output(s)
+    }
+
     fn refresh_connections(&mut self) {
         match client::send(&Request::ListConnections) {
             Ok(Response::Connections { items }) => {
@@ -511,7 +515,7 @@ impl App {
                 self.connections = items;
                 self.message = format!("{} connections", self.connections.len());
             }
-            Ok(Response::Error { message }) => self.message = message,
+            Ok(Response::Error { message }) => self.message = Self::sanitize(&message),
             Err(error) => self.set_daemon_error(&error),
             _ => {}
         }
@@ -520,7 +524,7 @@ impl App {
     fn refresh_kill_switch(&mut self) {
         match client::send(&Request::KillSwitchStatus) {
             Ok(Response::KillSwitch { active }) => self.kill_switch = active,
-            Ok(Response::Error { message }) => self.message = message,
+            Ok(Response::Error { message }) => self.message = Self::sanitize(&message),
             Err(error) => self.set_daemon_error(&error),
             _ => {}
         }
@@ -529,7 +533,7 @@ impl App {
     fn refresh_providers(&mut self) {
         match client::send(&Request::ListProviders) {
             Ok(Response::Providers { items }) => self.providers = items,
-            Ok(Response::Error { message }) => self.message = message,
+            Ok(Response::Error { message }) => self.message = Self::sanitize(&message),
             Err(error) => self.set_daemon_error(&error),
             _ => {}
         }
@@ -712,12 +716,12 @@ impl App {
         match client::send(request) {
             Ok(Response::Ok { message }) => {
                 self.daemon_available = true;
-                self.message = message;
+                self.message = Self::sanitize(&message);
                 if refresh_after {
                     self.refresh();
                 }
             }
-            Ok(Response::Error { message }) => self.message = message,
+            Ok(Response::Error { message }) => self.message = Self::sanitize(&message),
             Err(error) => self.set_daemon_error(&error),
             _ => self.message = "unexpected response from daemon".to_string(),
         }
