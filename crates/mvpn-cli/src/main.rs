@@ -80,6 +80,12 @@ enum Commands {
     },
     /// List available providers
     Providers(JsonFlag),
+    /// Update multivpn to the latest version from git
+    Update {
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
+    },
 }
 
 #[derive(Args, Debug, Clone, Copy, Default)]
@@ -215,7 +221,9 @@ fn build_action(cli: Cli) -> Result<Action> {
             request: Request::ListProviders,
             json: flags.json,
         },
-        Commands::Config { .. } => unreachable!("handled before build_action"),
+        Commands::Config { .. } | Commands::Update { .. } => {
+            unreachable!("handled before build_action")
+        }
     };
 
     Ok(action)
@@ -242,6 +250,7 @@ fn run() -> Result<()> {
 
     match cli.command {
         Commands::Config { command } => handle_config_command(command),
+        Commands::Update { yes } => run_update(yes),
         other => {
             let cli_rewrap = Cli { command: other };
             match build_action(cli_rewrap)? {
@@ -530,6 +539,87 @@ fn handle_config_command(command: ConfigCommands) -> Result<()> {
             Ok(())
         }
     }
+}
+
+const REPO_URL: &str = "https://github.com/hussmartinez/multivpn.git";
+
+fn run_update(skip_confirm: bool) -> Result<()> {
+    let current = env!("CARGO_PKG_VERSION");
+    println!("multivpn v{current}");
+
+    let source_dir = find_source_dir()?;
+    println!("source: {}", source_dir.display());
+
+    println!("pulling latest...");
+    let pull_status = Command::new("git")
+        .arg("-C")
+        .arg(&source_dir)
+        .args(["pull", "--ff-only"])
+        .status()
+        .context("failed to run git pull")?;
+
+    if !pull_status.success() {
+        bail!("git pull failed; resolve conflicts manually");
+    }
+
+    if !skip_confirm {
+        eprint!("rebuild and install? [y/N] ");
+        let mut answer = String::new();
+        std::io::stdin().read_line(&mut answer)?;
+        if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
+            println!("aborted");
+            return Ok(());
+        }
+    }
+
+    println!("building...");
+    let build = Command::new("cargo")
+        .arg("build")
+        .arg("--release")
+        .current_dir(&source_dir)
+        .status()
+        .context("failed to run cargo build")?;
+
+    if !build.success() {
+        bail!("build failed");
+    }
+
+    println!("installing...");
+    let install = Command::new("sudo")
+        .args(["make", "install"])
+        .current_dir(&source_dir)
+        .status()
+        .context("failed to run make install")?;
+
+    if !install.success() {
+        bail!("install failed");
+    }
+
+    println!("restarting daemon...");
+    let _ = Command::new("sudo")
+        .args(["systemctl", "restart", "multivpn"])
+        .status();
+
+    println!("updated successfully");
+    Ok(())
+}
+
+fn find_source_dir() -> Result<std::path::PathBuf> {
+    let candidates = [
+        dirs_next::home_dir().map(|h| h.join("sources/multivpn")),
+        Some(std::path::PathBuf::from("/opt/multivpn")),
+        Some(std::path::PathBuf::from("/usr/local/src/multivpn")),
+    ];
+
+    for candidate in candidates.into_iter().flatten() {
+        if candidate.join("Cargo.toml").exists() {
+            return Ok(candidate);
+        }
+    }
+
+    bail!(
+        "cannot find multivpn source directory; clone it first:\n  git clone {REPO_URL}"
+    );
 }
 
 fn edit_config() -> Result<()> {

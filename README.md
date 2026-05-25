@@ -55,6 +55,8 @@ mvpn providers                     # show available providers
 mvpn install tailscale --run       # show/run install command
 mvpn autoconnect add wg wg0        # auto-connect on boot
 mvpn config show                   # show config
+mvpn update                        # pull + rebuild + reinstall
+mvpn --version                     # show version
 mvpn-tui                           # launch TUI
 ```
 
@@ -73,6 +75,32 @@ connections = [
 
 [providers.wireguard]
 config_dir = "/etc/wireguard"
+```
+
+## Security
+
+The daemon runs as root and enforces:
+
+- **Socket authentication**: only root or members of the `multivpn` group can send commands (SO_PEERCRED)
+- **Input validation**: connection IDs restricted to `[a-zA-Z0-9_.-]`, import paths must be absolute with no `..` traversal or symlinks
+- **No shell injection**: all command execution uses argument arrays, not shell interpolation
+- **Atomic file permissions**: config files created with mode 600 from the start
+- **Output sanitization**: all daemon responses stripped of control characters before display
+- **Request size limit**: 64KB max per IPC request
+
+To allow a non-root user to use multivpn:
+
+```sh
+sudo groupadd multivpn
+sudo usermod -aG multivpn $USER
+# log out and back in
+```
+
+## Updating
+
+```sh
+mvpn update        # pull latest, rebuild, reinstall, restart daemon
+mvpn update -y     # skip confirmation
 ```
 
 ## Uninstall
