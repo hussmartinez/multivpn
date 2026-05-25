@@ -138,9 +138,12 @@ impl VpnProvider for OpenVpnProvider {
             &["-p", self.config_dir.to_string_lossy().as_ref()],
             true,
         )?;
-        run("cp", &[path.trim(), dest.to_string_lossy().as_ref()], true)
-            .with_context(|| format!("failed to import {path}"))?;
-        run("chmod", &["600", dest.to_string_lossy().as_ref()], true)?;
+        run(
+            "install",
+            &["-m", "600", path.trim(), dest.to_string_lossy().as_ref()],
+            true,
+        )
+        .with_context(|| format!("failed to import {path}"))?;
         Ok(name)
     }
 

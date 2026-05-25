@@ -271,13 +271,17 @@ impl VpnProvider for WireGuardProvider {
             &["-p", self.config_dir.to_string_lossy().as_ref()],
             true,
         )?;
+        run(
+            "install",
+            &["-m", "600", "/dev/null", path.to_string_lossy().as_ref()],
+            true,
+        )?;
         run_with_stdin(
             "tee",
             &[path.to_string_lossy().as_ref()],
             true,
             Some(config_text.as_bytes()),
         )?;
-        run("chmod", &["600", path.to_string_lossy().as_ref()], true)?;
 
         let autostart = config
             .fields
@@ -327,13 +331,17 @@ impl VpnProvider for WireGuardProvider {
             &["-p", self.config_dir.to_string_lossy().as_ref()],
             true,
         )?;
+        run(
+            "install",
+            &["-m", "600", "/dev/null", dest.to_string_lossy().as_ref()],
+            true,
+        )?;
         run_with_stdin(
             "tee",
             &[dest.to_string_lossy().as_ref()],
             true,
             Some(content.as_bytes()),
         )?;
-        run("chmod", &["600", dest.to_string_lossy().as_ref()], true)?;
 
         Ok(name)
     }
