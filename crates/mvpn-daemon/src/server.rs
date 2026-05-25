@@ -1,5 +1,5 @@
 use crate::state::DaemonState;
-use anyhow::Result;
+use anyhow::{Result, bail};
 use mvpn_core::ipc::{self, Request, Response};
 use mvpn_core::types::ProviderInfo;
 use std::sync::Arc;
@@ -7,11 +7,34 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::RwLock;
 
+const MAX_REQUEST_SIZE: usize = 65536;
+
 pub async fn handle_client(stream: UnixStream, state: Arc<RwLock<DaemonState>>) -> Result<()> {
+    let peer_uid = peer_uid(&stream)?;
+    if !is_authorized(peer_uid) {
+        bail!("unauthorized client uid={peer_uid}");
+    }
+    handle_client_inner(stream, state).await
+}
+
+pub async fn handle_client_unauth(stream: UnixStream, state: Arc<RwLock<DaemonState>>) -> Result<()> {
+    handle_client_inner(stream, state).await
+}
+
+async fn handle_client_inner(stream: UnixStream, state: Arc<RwLock<DaemonState>>) -> Result<()> {
     let (reader, mut writer) = stream.into_split();
     let mut lines = BufReader::new(reader).lines();
 
     while let Some(line) = lines.next_line().await? {
+        if line.len() > MAX_REQUEST_SIZE {
+            let response = Response::Error {
+                message: "request too large".into(),
+            };
+            let encoded = ipc::encode(&response)?;
+            writer.write_all(encoded.as_bytes()).await?;
+            continue;
+        }
+
         let response = match ipc::decode_request(&line) {
             Ok(req) => handle_request(req, &state).await,
             Err(e) => Response::Error {
@@ -298,5 +321,45 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
                 .collect();
             Response::Providers { items }
         }
+    }
+}
+
+fn peer_uid(stream: &UnixStream) -> Result<u32> {
+    let cred = stream.peer_cred()?;
+    Ok(cred.uid())
+}
+
+fn is_authorized(uid: u32) -> bool {
+    if uid == 0 {
+        return true;
+    }
+    is_in_multivpn_group(uid)
+}
+
+fn is_in_multivpn_group(uid: u32) -> bool {
+    let group_name = "multivpn";
+    let Ok(output) = std::process::Command::new("id")
+        .arg("-Gn")
+        .arg(uid.to_string())
+        .output()
+    else {
+        return false;
+    };
+    let groups = String::from_utf8_lossy(&output.stdout);
+    groups.split_whitespace().any(|g| g == group_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_is_always_authorized() {
+        assert!(is_authorized(0));
+    }
+
+    #[test]
+    fn max_request_size_is_64k() {
+        assert_eq!(MAX_REQUEST_SIZE, 65536);
     }
 }

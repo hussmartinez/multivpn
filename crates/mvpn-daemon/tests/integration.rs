@@ -4,7 +4,7 @@ use mvpn_core::ipc::{Request, Response, decode_response, encode};
 use mvpn_core::provider::VpnProvider;
 use mvpn_core::types::{ConnectionStatus, CreateRequest, FormField, ProviderKind, VpnConnection};
 use mvpn_daemon::killswitch::KillSwitchController;
-use mvpn_daemon::server::handle_client;
+use mvpn_daemon::server::handle_client_unauth;
 use mvpn_daemon::state::{DaemonState, StaticProviderRegistry};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -294,7 +294,7 @@ impl TestHarness {
         let server_state = state.clone();
         let server_task = tokio::spawn(async move {
             let (stream, _) = listener.accept().await?;
-            handle_client(stream, server_state).await
+            handle_client_unauth(stream, server_state).await
         });
 
         let stream = UnixStream::connect(&socket_path).await?;

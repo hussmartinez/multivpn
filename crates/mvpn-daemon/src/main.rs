@@ -38,11 +38,10 @@ async fn main() -> Result<()> {
         }
     })?;
 
-    // Allow non-root clients to connect
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(SOCKET_PATH, std::fs::Permissions::from_mode(0o666))?;
+        std::fs::set_permissions(SOCKET_PATH, std::fs::Permissions::from_mode(0o660))?;
     }
 
     eprintln!("mvpn-daemon listening on {SOCKET_PATH}");
