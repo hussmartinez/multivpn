@@ -274,6 +274,7 @@ pub struct App {
     pub should_quit: bool,
     pub mode: Mode,
     pub filter: String,
+    pub daemon_available: bool,
 }
 
 impl App {
@@ -287,6 +288,7 @@ impl App {
             should_quit: false,
             mode: Mode::Normal,
             filter: String::new(),
+            daemon_available: false,
         }
     }
 
@@ -505,11 +507,12 @@ impl App {
     fn refresh_connections(&mut self) {
         match client::send(&Request::ListConnections) {
             Ok(Response::Connections { items }) => {
+                self.daemon_available = true;
                 self.connections = items;
                 self.message = format!("{} connections", self.connections.len());
             }
             Ok(Response::Error { message }) => self.message = message,
-            Err(error) => self.message = error.to_string(),
+            Err(error) => self.set_daemon_error(&error),
             _ => {}
         }
     }
@@ -518,7 +521,7 @@ impl App {
         match client::send(&Request::KillSwitchStatus) {
             Ok(Response::KillSwitch { active }) => self.kill_switch = active,
             Ok(Response::Error { message }) => self.message = message,
-            Err(error) => self.message = error.to_string(),
+            Err(error) => self.set_daemon_error(&error),
             _ => {}
         }
     }
@@ -527,8 +530,20 @@ impl App {
         match client::send(&Request::ListProviders) {
             Ok(Response::Providers { items }) => self.providers = items,
             Ok(Response::Error { message }) => self.message = message,
-            Err(error) => self.message = error.to_string(),
+            Err(error) => self.set_daemon_error(&error),
             _ => {}
+        }
+    }
+
+    fn set_daemon_error(&mut self, error: &anyhow::Error) {
+        let msg = error.to_string();
+        self.daemon_available = false;
+        if msg.contains("cannot connect") {
+            self.message = "Daemon not running — start with: sudo systemctl start multivpn".to_string();
+        } else if msg.to_lowercase().contains("permission denied") {
+            self.message = "Permission denied — try running with sudo".to_string();
+        } else {
+            self.message = msg;
         }
     }
 
@@ -696,13 +711,14 @@ impl App {
     fn send_action(&mut self, request: &Request, refresh_after: bool) {
         match client::send(request) {
             Ok(Response::Ok { message }) => {
+                self.daemon_available = true;
                 self.message = message;
                 if refresh_after {
                     self.refresh();
                 }
             }
             Ok(Response::Error { message }) => self.message = message,
-            Err(error) => self.message = error.to_string(),
+            Err(error) => self.set_daemon_error(&error),
             _ => self.message = "unexpected response from daemon".to_string(),
         }
     }
@@ -842,6 +858,7 @@ mod tests {
             should_quit: false,
             mode: Mode::Normal,
             filter: "off".into(),
+            daemon_available: false,
         };
 
         let filtered = app.filtered_connections();

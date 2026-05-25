@@ -27,9 +27,16 @@ async fn main() -> Result<()> {
         autoconnect::run(&s.config);
     }
 
-    // Clean up old socket
     let _ = std::fs::remove_file(SOCKET_PATH);
-    let listener = UnixListener::bind(SOCKET_PATH)?;
+    let listener = UnixListener::bind(SOCKET_PATH).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AddrInUse {
+            anyhow::anyhow!(
+                "another mvpn-daemon instance may already be running (socket {SOCKET_PATH} in use)"
+            )
+        } else {
+            anyhow::anyhow!("failed to bind socket {SOCKET_PATH}: {e}")
+        }
+    })?;
 
     // Allow non-root clients to connect
     #[cfg(unix)]

@@ -221,7 +221,23 @@ fn build_action(cli: Cli) -> Result<Action> {
     Ok(action)
 }
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(error) = run() {
+        let msg = format!("{error:#}");
+        if msg.contains("cannot connect") {
+            eprintln!("error: daemon is not running");
+            eprintln!("  start it with: sudo systemctl start multivpn");
+        } else if msg.to_lowercase().contains("permission denied") {
+            eprintln!("error: {msg}");
+            eprintln!("  hint: try running with sudo");
+        } else {
+            eprintln!("error: {msg}");
+        }
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
