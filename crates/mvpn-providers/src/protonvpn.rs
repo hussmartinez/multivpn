@@ -26,6 +26,43 @@ impl ProtonVpnProvider {
         Self { tool }
     }
 
+    fn gather_network_info(&self) -> NetworkInfo {
+        let mut info = NetworkInfo::default();
+
+        if let Ok(output) = run(self.cli_name(), &["status"], false) {
+            for line in output.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("IP:") || trimmed.starts_with("Server IP:") {
+                    info.endpoint = trimmed.split(':').last().map(|s| s.trim().to_string());
+                } else if trimmed.starts_with("Server:") {
+                    // store server name in gateway field for display
+                }
+            }
+        }
+
+        // Find proton/tun interface
+        if let Ok(output) = run("ip", &["-o", "link", "show"], false) {
+            for line in output.lines() {
+                if let Some(iface) = line.split(':').nth(1).map(|s| s.trim().to_string()) {
+                    if iface.starts_with("proton") || iface.starts_with("tun") {
+                        info.interface = Some(iface.clone());
+                        if let Ok(addr_out) = run("ip", &["addr", "show", &iface], false) {
+                            for addr_line in addr_out.lines() {
+                                let t = addr_line.trim();
+                                if t.starts_with("inet ") {
+                                    info.local_ip = t.split_whitespace().nth(1).map(|s| s.to_string());
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        info
+    }
+
     fn cli_name(&self) -> &str {
         match &self.tool {
             Some(ProtonTool::ProtonVpnCli) => {
@@ -64,6 +101,11 @@ impl VpnProvider for ProtonVpnProvider {
         }
 
         let status = self.status("default")?;
+        let network = if matches!(status, ConnectionStatus::Connected) {
+            self.gather_network_info()
+        } else {
+            NetworkInfo::default()
+        };
         Ok(vec![VpnConnection {
             id: "default".into(),
             provider: ProviderKind::ProtonVpn,
@@ -71,6 +113,7 @@ impl VpnProvider for ProtonVpnProvider {
             status,
             autostart: false,
             details: serde_json::json!({}),
+            network,
         }])
     }
 

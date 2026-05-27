@@ -58,6 +58,7 @@ impl VpnProvider for OpenVpnProvider {
                 },
                 autostart: self.is_enabled(&name),
                 details: serde_json::json!({ "path": path.display().to_string() }),
+                network: if is_active { gather_ovpn_network_info(&name) } else { NetworkInfo::default() },
             });
         }
         Ok(connections)
@@ -177,6 +178,55 @@ impl VpnProvider for OpenVpnProvider {
             },
         ]
     }
+}
+
+fn gather_ovpn_network_info(name: &str) -> NetworkInfo {
+    let mut info = NetworkInfo::default();
+
+    let tun_iface = find_tun_interface(name);
+    info.interface = tun_iface.clone();
+
+    if let Some(ref iface) = tun_iface {
+        if let Ok(output) = run("ip", &["addr", "show", iface], false) {
+            for line in output.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("inet ") {
+                    info.local_ip = trimmed.split_whitespace().nth(1).map(|s| s.to_string());
+                    break;
+                }
+            }
+        }
+
+        if let Ok(output) = run("ip", &["route"], false) {
+            for line in output.lines() {
+                if line.contains(iface) {
+                    info.routes.push(line.trim().to_string());
+                    if line.starts_with("default") {
+                        info.gateway = line.split_whitespace().nth(2).map(|s| s.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    info
+}
+
+fn find_tun_interface(name: &str) -> Option<String> {
+    if let Ok(output) = run("ip", &["-o", "link", "show", "type", "tun"], false) {
+        for line in output.lines() {
+            let iface = line.split(':').nth(1).map(|s| s.trim().to_string());
+            if let Some(ref i) = iface {
+                if i.contains(name) || i.starts_with("tun") {
+                    return iface;
+                }
+            }
+        }
+        if let Some(line) = output.lines().next() {
+            return line.split(':').nth(1).map(|s| s.trim().to_string());
+        }
+    }
+    None
 }
 
 impl OpenVpnProvider {

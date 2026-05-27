@@ -51,6 +51,7 @@ pub struct VpnConnection {
     pub status: ConnectionStatus,
     pub autostart: bool,
     pub details: serde_json::Value,
+    pub network: NetworkInfo,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -81,6 +82,25 @@ pub enum FieldType {
 pub struct CreateRequest {
     pub name: String,
     pub fields: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct NetworkInfo {
+    pub interface: Option<String>,
+    pub local_ip: Option<String>,
+    pub gateway: Option<String>,
+    pub dns: Vec<String>,
+    pub routes: Vec<String>,
+    pub transfer_rx: Option<String>,
+    pub transfer_tx: Option<String>,
+    pub endpoint: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct SystemInfo {
+    pub default_gateway: Option<String>,
+    pub default_interface: Option<String>,
+    pub public_ip: Option<String>,
 }
 
 #[cfg(test)]
@@ -131,6 +151,7 @@ mod tests {
             status: ConnectionStatus::Connected,
             autostart: true,
             details: serde_json::json!({"path": "/etc/wireguard/wg0.conf"}),
+            network: NetworkInfo::default(),
         };
         let json = serde_json::to_string(&conn).unwrap();
         let back: VpnConnection = serde_json::from_str(&json).unwrap();

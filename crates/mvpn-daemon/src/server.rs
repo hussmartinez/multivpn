@@ -327,6 +327,46 @@ async fn handle_request(req: Request, state: &Arc<RwLock<DaemonState>>) -> Respo
                 .collect();
             Response::Providers { items }
         }
+
+        Request::SystemInfo => {
+            let info = gather_system_info();
+            Response::SystemInfo { info }
+        }
+    }
+}
+
+fn gather_system_info() -> mvpn_core::types::SystemInfo {
+    let default_gateway = std::process::Command::new("ip")
+        .args(["route", "show", "default"])
+        .output()
+        .ok()
+        .and_then(|out| {
+            let s = String::from_utf8_lossy(&out.stdout);
+            s.split_whitespace().nth(2).map(|gw| gw.to_string())
+        });
+
+    let default_interface = std::process::Command::new("ip")
+        .args(["route", "show", "default"])
+        .output()
+        .ok()
+        .and_then(|out| {
+            let s = String::from_utf8_lossy(&out.stdout);
+            s.split_whitespace().nth(4).map(|iface| iface.to_string())
+        });
+
+    let public_ip = std::process::Command::new("curl")
+        .args(["-s", "--max-time", "3", "https://ifconfig.me"])
+        .output()
+        .ok()
+        .and_then(|out| {
+            let ip = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if ip.is_empty() { None } else { Some(ip) }
+        });
+
+    mvpn_core::types::SystemInfo {
+        default_gateway,
+        default_interface,
+        public_ip,
     }
 }
 

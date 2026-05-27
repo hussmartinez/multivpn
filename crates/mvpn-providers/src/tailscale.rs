@@ -35,6 +35,11 @@ impl VpnProvider for TailscaleProvider {
 
         let status = self.status("default")?;
         let details = self.parse_status_details();
+        let network = if matches!(status, ConnectionStatus::Connected) {
+            self.gather_network_info()
+        } else {
+            NetworkInfo::default()
+        };
 
         Ok(vec![VpnConnection {
             id: "default".into(),
@@ -43,6 +48,7 @@ impl VpnProvider for TailscaleProvider {
             status,
             autostart: self.is_enabled(),
             details,
+            network,
         }])
     }
 
@@ -135,6 +141,34 @@ impl TailscaleProvider {
         } else {
             serde_json::json!({ "peers": peers })
         }
+    }
+
+    fn gather_network_info(&self) -> NetworkInfo {
+        let mut info = NetworkInfo {
+            interface: Some("tailscale0".to_string()),
+            ..Default::default()
+        };
+
+        let output = run("tailscale", &["status", "--json"], false)
+            .or_else(|_| run("tailscale", &["status", "--json"], true))
+            .unwrap_or_default();
+
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&output) {
+            if let Some(self_node) = json.get("Self") {
+                if let Some(ips) = self_node.get("TailscaleIPs").and_then(|v| v.as_array()) {
+                    info.local_ip = ips.first().and_then(|v| v.as_str()).map(|s| s.to_string());
+                }
+            }
+        }
+
+        if let Ok(dns_output) = run("tailscale", &["dns", "status"], false) {
+            info.dns = dns_output.lines()
+                .filter(|l| !l.is_empty() && !l.contains(':'))
+                .map(|s| s.trim().to_string())
+                .collect();
+        }
+
+        info
     }
 
     fn is_enabled(&self) -> bool {

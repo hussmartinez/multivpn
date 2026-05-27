@@ -5,7 +5,9 @@ A modular multi-VPN manager for Linux. Manage WireGuard, OpenVPN, ProtonVPN, and
 ## Features
 
 - Multiple simultaneous VPN connections
+- Real-time network statistics (IPs, gateways, DNS, transfer rates)
 - Global kill switch (nftables/iptables)
+- System-wide status bar and detailed info in TUI
 - Auto-connect on boot via daemon
 - CLI, TUI, and system tray interfaces
 - Plugin-like provider architecture

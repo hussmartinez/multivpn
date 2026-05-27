@@ -1,4 +1,4 @@
-use crate::command::{self, command_exists, run, run_with_stdin};
+use crate::command::{command_exists, run, run_with_stdin};
 use anyhow::{Context, Result, anyhow, bail};
 use mvpn_core::provider::VpnProvider;
 use mvpn_core::types::*;
@@ -181,6 +181,7 @@ impl VpnProvider for WireGuardProvider {
                     },
                     autostart: self.is_enabled(&name),
                     details: serde_json::json!({ "path": path.display().to_string() }),
+                    network: if is_active { gather_wg_network_info(&name, &path) } else { NetworkInfo::default() },
                 },
             );
         }
@@ -195,6 +196,7 @@ impl VpnProvider for WireGuardProvider {
                     status: ConnectionStatus::Connected,
                     autostart: self.is_enabled(&name),
                     details: serde_json::json!({}),
+                    network: gather_wg_network_info(&name, &PathBuf::new()),
                 });
         }
 
@@ -425,6 +427,59 @@ impl VpnProvider for WireGuardProvider {
             },
         ]
     }
+}
+
+fn gather_wg_network_info(iface: &str, config_path: &Path) -> NetworkInfo {
+    let mut info = NetworkInfo {
+        interface: Some(iface.to_string()),
+        ..Default::default()
+    };
+
+    if let Ok(output) = run("ip", &["addr", "show", iface], false) {
+        for line in output.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("inet ") {
+                info.local_ip = trimmed.split_whitespace().nth(1).map(|s| s.to_string());
+                break;
+            }
+        }
+    }
+
+    if let Ok(output) = run("wg", &["show", iface], true)
+        .or_else(|_| run("wg", &["show", iface], false))
+    {
+        for line in output.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("endpoint:") {
+                info.endpoint = trimmed.strip_prefix("endpoint:").map(|s| s.trim().to_string());
+            } else if trimmed.starts_with("transfer:") {
+                let transfer = trimmed.strip_prefix("transfer:").unwrap_or("").trim();
+                let parts: Vec<&str> = transfer.split("received,").collect();
+                if parts.len() == 2 {
+                    info.transfer_rx = Some(parts[0].trim().to_string());
+                    info.transfer_tx = Some(parts[1].replace("sent", "").trim().to_string());
+                }
+            } else if trimmed.starts_with("allowed ips:") {
+                let ips = trimmed.strip_prefix("allowed ips:").unwrap_or("").trim();
+                info.routes = ips.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            }
+        }
+    }
+
+    if config_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(config_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.to_lowercase().starts_with("dns") {
+                    if let Some(val) = trimmed.split('=').nth(1) {
+                        info.dns = val.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                    }
+                }
+            }
+        }
+    }
+
+    info
 }
 
 #[cfg(test)]

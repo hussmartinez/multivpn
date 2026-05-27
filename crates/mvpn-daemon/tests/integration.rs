@@ -342,6 +342,7 @@ fn mock_connection(
         status,
         autostart,
         details: serde_json::json!({ "id": id }),
+        network: mvpn_core::types::NetworkInfo::default(),
     }
 }
 

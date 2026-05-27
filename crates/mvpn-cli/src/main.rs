@@ -393,6 +393,24 @@ fn print_response(response: &Response, json: bool) -> Result<()> {
                 );
             }
         }
+        Response::SystemInfo { info } => {
+            if json {
+                println!("{}", serde_json::to_string_pretty(info)?);
+                return Ok(());
+            }
+            println!(
+                "Default gateway: {}",
+                info.default_gateway.as_deref().unwrap_or("unknown")
+            );
+            println!(
+                "Default interface: {}",
+                info.default_interface.as_deref().unwrap_or("unknown")
+            );
+            println!(
+                "Public IP: {}",
+                info.public_ip.as_deref().unwrap_or("unknown")
+            );
+        }
     }
 
     Ok(())

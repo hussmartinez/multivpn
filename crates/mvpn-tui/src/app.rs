@@ -2,7 +2,9 @@ use crate::client;
 use anyhow::{Result, bail};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use mvpn_core::ipc::{Request, Response};
-use mvpn_core::types::{CreateRequest, FieldType, FormField, ProviderInfo, ProviderKind, VpnConnection};
+use mvpn_core::types::{
+    CreateRequest, FieldType, FormField, ProviderInfo, ProviderKind, SystemInfo, VpnConnection,
+};
 use ratatui::DefaultTerminal;
 use std::time::Duration;
 
@@ -13,6 +15,9 @@ pub enum Mode {
     Create(CreateForm),
     Import(ImportForm),
     ConfirmRemove(String),
+    Providers,
+    Config(String),
+    SystemInfoView,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -275,6 +280,7 @@ pub struct App {
     pub mode: Mode,
     pub filter: String,
     pub daemon_available: bool,
+    pub system_info: SystemInfo,
 }
 
 impl App {
@@ -289,6 +295,7 @@ impl App {
             mode: Mode::Normal,
             filter: String::new(),
             daemon_available: false,
+            system_info: SystemInfo::default(),
         }
     }
 
@@ -341,6 +348,26 @@ impl App {
                     self.mode = Mode::ConfirmRemove(name);
                 }
             }
+            Mode::Providers => {
+                if !matches!(key.code, KeyCode::Esc) {
+                    self.mode = Mode::Providers;
+                }
+            }
+            Mode::Config(text) => {
+                if !matches!(key.code, KeyCode::Esc) {
+                    self.mode = Mode::Config(text);
+                }
+            }
+            Mode::SystemInfoView => match key.code {
+                KeyCode::Char('r') => {
+                    self.refresh_system_info();
+                    self.mode = Mode::SystemInfoView;
+                }
+                KeyCode::Esc => {}
+                _ => {
+                    self.mode = Mode::SystemInfoView;
+                }
+            },
         }
     }
 
@@ -358,6 +385,19 @@ impl App {
             KeyCode::Char('i') => self.begin_import(),
             KeyCode::Char('/') => self.mode = Mode::Filter(self.filter.clone()),
             KeyCode::Char('K') => self.toggle_kill_switch(),
+            KeyCode::Char('p') => self.mode = Mode::Providers,
+            KeyCode::Char('e') => {
+                let path = dirs_next::config_dir()
+                    .unwrap_or_default()
+                    .join("multivpn/config.toml");
+                let text = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|_| format!("# Cannot read {}", path.display()));
+                self.mode = Mode::Config(text);
+            }
+            KeyCode::Char('s') => {
+                self.refresh_system_info();
+                self.mode = Mode::SystemInfoView;
+            }
             _ => {}
         }
     }
@@ -501,6 +541,7 @@ impl App {
         self.refresh_connections();
         self.refresh_kill_switch();
         self.refresh_providers();
+        self.refresh_system_info();
         self.clamp_selection();
     }
 
@@ -535,6 +576,13 @@ impl App {
             Ok(Response::Providers { items }) => self.providers = items,
             Ok(Response::Error { message }) => self.message = Self::sanitize(&message),
             Err(error) => self.set_daemon_error(&error),
+            _ => {}
+        }
+    }
+
+    fn refresh_system_info(&mut self) {
+        match client::send(&Request::SystemInfo) {
+            Ok(Response::SystemInfo { info }) => self.system_info = info,
             _ => {}
         }
     }
@@ -845,6 +893,7 @@ mod tests {
                     status: ConnectionStatus::Connected,
                     autostart: false,
                     details: serde_json::json!({}),
+                    network: mvpn_core::types::NetworkInfo::default(),
                 },
                 VpnConnection {
                     id: "wg1".into(),
@@ -853,6 +902,7 @@ mod tests {
                     status: ConnectionStatus::Disconnected,
                     autostart: false,
                     details: serde_json::json!({}),
+                    network: mvpn_core::types::NetworkInfo::default(),
                 },
             ],
             providers: Vec::new(),
@@ -863,6 +913,7 @@ mod tests {
             mode: Mode::Normal,
             filter: "off".into(),
             daemon_available: false,
+            system_info: SystemInfo::default(),
         };
 
         let filtered = app.filtered_connections();

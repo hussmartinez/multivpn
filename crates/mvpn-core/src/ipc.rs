@@ -1,6 +1,7 @@
 use crate::config::AutoconnectEntry;
 use crate::types::{
-    ConnectionStatus, CreateRequest, FormField, ProviderInfo, ProviderKind, VpnConnection,
+    ConnectionStatus, CreateRequest, FormField, ProviderInfo, ProviderKind, SystemInfo,
+    VpnConnection,
 };
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +63,7 @@ pub enum Request {
         value: String,
     },
     ListProviders,
+    SystemInfo,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -97,6 +99,9 @@ pub enum Response {
     ConfigFields {
         provider: ProviderKind,
         fields: Vec<FormField>,
+    },
+    SystemInfo {
+        info: SystemInfo,
     },
 }
 
@@ -290,6 +295,7 @@ mod tests {
                 status: ConnectionStatus::Connected,
                 autostart: false,
                 details: serde_json::json!({}),
+                network: crate::types::NetworkInfo::default(),
             }],
         };
         let encoded = encode(&resp).unwrap();
